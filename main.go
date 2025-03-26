@@ -1,16 +1,20 @@
 package main
 
 import (
+	"ginExample/config"
 	"ginExample/handlers"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	// Initialize DB
+	config.InitDB()
+
 	r := gin.Default()
 
 	// Book routes
 	r.GET("/books", handlers.GetBooks)
-	r.POST("/books", handlers.AddBook)
+	r.POST("/books", handlers.CreateBook)
 	r.GET("/books/:id", handlers.GetBookByID)
 	r.PUT("/books/:id", handlers.UpdateBook)
 	r.DELETE("/books/:id", handlers.DeleteBook)
