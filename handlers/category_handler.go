@@ -3,27 +3,18 @@ package handlers
 import (
 	"ginExample/config"
 	"ginExample/models"
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 // GetCategories retrieves all categories from the database.
 func GetCategories(c *gin.Context) {
-	rows, err := config.DB.Query("SELECT id, name FROM categories")
-	if err != nil {
+	var categories []models.Category
+	result := config.DB.Find(&categories)
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch categories"})
 		return
-	}
-	defer rows.Close()
-
-	var categories []models.Category
-	for rows.Next() {
-		var category models.Category
-		if err := rows.Scan(&category.ID, &category.Name); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning category"})
-			return
-		}
-		categories = append(categories, category)
 	}
 
 	c.JSON(http.StatusOK, categories)
@@ -42,9 +33,8 @@ func AddCategory(c *gin.Context) {
 		return
 	}
 
-	query := "INSERT INTO categories (name) VALUES ($1) RETURNING id"
-	err := config.DB.QueryRow(query, newCategory.Name).Scan(&newCategory.ID)
-	if err != nil {
+	result := config.DB.Create(&newCategory)
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add category"})
 		return
 	}

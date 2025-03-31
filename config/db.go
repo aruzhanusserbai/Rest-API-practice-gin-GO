@@ -1,26 +1,24 @@
 package config
 
 import (
-	"database/sql"
-	"fmt"
+	"ginExample/models"
 	"log"
 
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-var DB *sql.DB
+var DB *gorm.DB
 
-func InitDB() {
-	connStr := "host=localhost port=5432 user=postgres password=postgres dbname=book_store sslmode=disable"
-	var err error
-	DB, err = sql.Open("postgres", connStr)
+func ConnectDatabase() {
+	dsn := "host=localhost user=postgres password=postgres dbname=book_store port=5432 sslmode=disable"
+	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("Error connecting to DB: %v", err)
+		log.Fatal("Failed to connect to database:", err)
 	}
 
-	if err = DB.Ping(); err != nil {
-		log.Fatalf("DB Ping Error: %v", err)
-	}
+	// Auto migrate your models
+	database.AutoMigrate(&models.Author{}, &models.Category{}, &models.Book{})
 
-	fmt.Println("✅ Connected to PostgreSQL")
+	DB = database
 }

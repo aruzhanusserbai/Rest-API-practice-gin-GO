@@ -10,21 +10,11 @@ import (
 
 // GetAuthors retrieves all authors from the database.
 func GetAuthors(c *gin.Context) {
-	rows, err := config.DB.Query("SELECT id, name FROM authors")
-	if err != nil {
+	var authors []models.Author
+	result := config.DB.Find(&authors)
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch authors"})
 		return
-	}
-	defer rows.Close()
-
-	var authors []models.Author
-	for rows.Next() {
-		var author models.Author
-		if err := rows.Scan(&author.ID, &author.Name); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning author"})
-			return
-		}
-		authors = append(authors, author)
 	}
 
 	c.JSON(http.StatusOK, authors)
@@ -43,9 +33,8 @@ func AddAuthor(c *gin.Context) {
 		return
 	}
 
-	query := "INSERT INTO authors (name) VALUES ($1) RETURNING id"
-	err := config.DB.QueryRow(query, newAuthor.Name).Scan(&newAuthor.ID)
-	if err != nil {
+	result := config.DB.Create(&newAuthor)
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add author"})
 		return
 	}

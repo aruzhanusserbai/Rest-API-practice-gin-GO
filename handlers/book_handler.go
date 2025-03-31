@@ -1,159 +1,128 @@
 package handlers
 
 import (
-	"database/sql"
 	"ginExample/config"
 	"ginExample/models"
+	"math"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
+// GetBooks retrieves all books from the database with pagination
 func GetBooks(c *gin.Context) {
-	// Parse page and limit query parameters with defaults
+	// Get page and limit from query parameters, set defaults if not provided
 	page := c.DefaultQuery("page", "1")
 	limit := c.DefaultQuery("limit", "10")
 
-	// Convert page and limit to integers
-	pageNum, err := strconv.Atoi(page)
-	if err != nil || pageNum < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid page number"})
-		return
-	}
+	// Convert string to integer
+	pageInt, _ := strconv.Atoi(page)
+	limitInt, _ := strconv.Atoi(limit)
 
-	limitNum, err := strconv.Atoi(limit)
-	if err != nil || limitNum < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid limit number"})
-		return
-	}
+	// Calculate offset
+	offset := (pageInt - 1) * limitInt
 
-	// Calculate offset for pagination
-	offset := (pageNum - 1) * limitNum
+	var books []models.Book
+	var total int64
 
-	// Fetch books with LIMIT and OFFSET
-	rows, err := config.DB.Query("SELECT id, title, author_id, category_id, price FROM books LIMIT $1 OFFSET $2", limitNum, offset)
-	if err != nil {
+	// Get total count of books
+	config.DB.Model(&models.Book{}).Count(&total)
+
+	// Get books with pagination, without loading relationships
+	result := config.DB.Model(&models.Book{}).
+		Select("id, title, author_id, category_id").
+		Limit(limitInt).
+		Offset(offset).
+		Find(&books)
+
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch books"})
 		return
 	}
-	defer rows.Close()
 
-	var books []models.Book
-	for rows.Next() {
-		var book models.Book
-		if err := rows.Scan(&book.ID, &book.Title, &book.AuthorID, &book.CategoryID, &book.Price); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning book"})
-			return
-		}
-		books = append(books, book)
-	}
-
-	if err := rows.Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error iterating books"})
-		return
-	}
-
-	// Return paginated books
 	c.JSON(http.StatusOK, gin.H{
-		"page":  pageNum,
-		"limit": limitNum,
-		"total": len(books),
-		"books": books,
+		"data":       books,
+		"total":      total,
+		"page":       pageInt,
+		"limit":      limitInt,
+		"totalPages": int(math.Ceil(float64(total) / float64(limitInt))),
 	})
 }
 
-// CreateBook adds a new book to the database.
-func CreateBook(c *gin.Context) {
-	var book models.Book
-	if err := c.ShouldBindJSON(&book); err != nil {
+// AddBook adds a new book to the database
+func AddBook(c *gin.Context) {
+	var newBook models.Book
+	if err := c.ShouldBindJSON(&newBook); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	// Input validation
-	if book.Title == "" || book.AuthorID <= 0 || book.CategoryID <= 0 || book.Price <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid book data"})
+	if newBook.Title == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Book title is required"})
 		return
 	}
 
-	query := `INSERT INTO books (title, author_id, category_id, price) 
-              VALUES ($1, $2, $3, $4) RETURNING id`
-	err := config.DB.QueryRow(query, book.Title, book.AuthorID, book.CategoryID, book.Price).Scan(&book.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create book"})
+	result := config.DB.Create(&newBook)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add book"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, book)
+	// Fetch the complete book data with related entities
+	config.DB.Preload("Author").Preload("Category").First(&newBook, newBook.ID)
+	c.JSON(http.StatusCreated, newBook)
 }
 
-// GetBookByID retrieves a single book by its ID.
+// GetBookByID retrieves a single book by its ID
 func GetBookByID(c *gin.Context) {
 	id := c.Param("id")
-
 	var book models.Book
-	err := config.DB.QueryRow(
-		"SELECT id, title, author_id, category_id, price FROM books WHERE id = $1", id,
-	).Scan(&book.ID, &book.Title, &book.AuthorID, &book.CategoryID, &book.Price)
 
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching book"})
+	result := config.DB.Preload("Author").Preload("Category").First(&book, id)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
 		return
 	}
 
 	c.JSON(http.StatusOK, book)
 }
 
-// UpdateBook updates an existing book by its ID.
+// UpdateBook updates an existing book by its ID
 func UpdateBook(c *gin.Context) {
 	id := c.Param("id")
 	var book models.Book
+
+	// Check if book exists
+	if err := config.DB.First(&book, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
+		return
+	}
+
+	// Bind new data
 	if err := c.ShouldBindJSON(&book); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	// Input validation
-	if book.Title == "" || book.AuthorID <= 0 || book.CategoryID <= 0 || book.Price <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid book data"})
-		return
-	}
-
-	query := `UPDATE books 
-              SET title = $1, author_id = $2, category_id = $3, price = $4 
-              WHERE id = $5`
-	result, err := config.DB.Exec(query, book.Title, book.AuthorID, book.CategoryID, book.Price, id)
-	if err != nil {
+	// Update the book
+	result := config.DB.Save(&book)
+	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update book"})
 		return
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Book updated successfully"})
+	// Return updated book with relationships
+	config.DB.Preload("Author").Preload("Category").First(&book, id)
+	c.JSON(http.StatusOK, book)
 }
 
-// DeleteBook deletes a book by its ID.
+// DeleteBook deletes a book by its ID
 func DeleteBook(c *gin.Context) {
 	id := c.Param("id")
+	result := config.DB.Delete(&models.Book{}, id)
 
-	result, err := config.DB.Exec("DELETE FROM books WHERE id = $1", id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete book"})
-		return
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
+	if result.RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
 		return
 	}
