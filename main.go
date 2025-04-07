@@ -3,6 +3,7 @@ package main
 import (
 	"ginExample/config"
 	"ginExample/handlers"
+	"ginExample/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,20 +14,29 @@ func main() {
 
 	r := gin.Default()
 
-	// Book routes
-	r.GET("/books", handlers.GetBooks)
-	r.POST("/books", handlers.AddBook)
-	r.GET("/books/:id", handlers.GetBookByID)
-	r.PUT("/books/:id", handlers.UpdateBook)
-	r.DELETE("/books/:id", handlers.DeleteBook)
+	// Public routes
+	r.POST("/register", handlers.Register)
+	r.POST("/login", handlers.Login)
 
-	// Author routes
-	r.GET("/authors", handlers.GetAuthors)
-	r.POST("/authors", handlers.AddAuthor)
+	// Protected routes
+	protected := r.Group("/")
+	protected.Use(middleware.AuthMiddleware())
+	{
+		// Book routes
+		protected.GET("/books", handlers.GetBooks)
+		protected.POST("/books", handlers.AddBook)
+		protected.GET("/books/:id", handlers.GetBookByID)
+		protected.PUT("/books/:id", handlers.UpdateBook)
+		protected.DELETE("/books/:id", handlers.DeleteBook)
 
-	// Category routes
-	r.GET("/categories", handlers.GetCategories)
-	r.POST("/categories", handlers.AddCategory)
+		// Author routes
+		protected.GET("/authors", handlers.GetAuthors)
+		protected.POST("/authors", handlers.AddAuthor)
+
+		// Category routes
+		protected.GET("/categories", handlers.GetCategories)
+		protected.POST("/categories", handlers.AddCategory)
+	}
 
 	r.Run(":8080")
 }

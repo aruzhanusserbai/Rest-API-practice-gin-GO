@@ -18,7 +18,7 @@ func ConnectDatabase() {
 	}
 
 	// Auto migrate your models
-	database.AutoMigrate(&models.Author{}, &models.Category{}, &models.Book{})
+	database.AutoMigrate(&models.Author{}, &models.Category{}, &models.Book{}, &models.User{})
 
 	DB = database
 }
