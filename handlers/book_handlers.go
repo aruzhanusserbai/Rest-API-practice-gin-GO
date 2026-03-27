@@ -2,19 +2,15 @@ package handlers
 
 import (
 	"bookstore/models"
-	"encoding/json"
-	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 )
 
-func GetBooks(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	category := r.URL.Query().Get("category_id")
-	pageStr := r.URL.Query().Get("page")
-	limitStr := r.URL.Query().Get("limit")
+func GetBooks(c *gin.Context) {
+	category := c.Query("category_id")
+	pageStr := c.Query("page")
+	limitStr := c.Query("limit")
 
 	page, _ := strconv.Atoi(pageStr)
 	limit, _ := strconv.Atoi(limitStr)
@@ -50,24 +46,23 @@ func GetBooks(w http.ResponseWriter, r *http.Request) {
 		end = len(filtered)
 	}
 
-	json.NewEncoder(w).Encode(filtered[start:end])
+	c.JSON(200, filtered[start:end])
 }
 
-func AddBook(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func AddBook(c *gin.Context) {
 	var book models.Book
 
-	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
-		http.Error(w, err.Error(), 400)
+	if err := c.ShouldBindBodyWithJSON(&book); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
 	if book.Title == "" {
-		http.Error(w, "Title is required", http.StatusBadRequest)
+		c.JSON(400, gin.H{"error": "Title is required"})
 		return
 	}
 	if book.Price <= 0 {
-		http.Error(w, "Price must be greater than 0", http.StatusBadRequest)
+		c.JSON(400, gin.H{"error": "Price must be greater than 0"})
 		return
 	}
 
@@ -75,77 +70,70 @@ func AddBook(w http.ResponseWriter, r *http.Request) {
 	models.NextBookID++
 	models.Books[book.ID] = book
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(book)
+	c.JSON(200, book)
 }
 
-func GetBook(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
-	id, err := strconv.Atoi(params["id"])
+func GetBook(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
 
 	if err != nil {
-		http.Error(w, "Invalid book ID", http.StatusBadRequest)
+		c.JSON(400, gin.H{"error": "Invalid book ID"})
 		return
 	}
 
 	book, exists := models.Books[id]
 	if !exists {
-		http.Error(w, "Book not found", http.StatusNotFound)
+		c.JSON(404, gin.H{"error": "Book not found"})
 		return
 	}
 
-	json.NewEncoder(w).Encode(book)
+	c.JSON(200, book)
 }
 
-func UpdateBook(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
-	id, err := strconv.Atoi(params["id"])
+func UpdateBook(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
 
 	if err != nil {
-		http.Error(w, "Invalid book ID", http.StatusBadRequest)
+		c.JSON(400, gin.H{"error": "Invalid book ID"})
 		return
 	}
 	_, exists := models.Books[id]
 	if !exists {
-		http.Error(w, "Book not found", http.StatusNotFound)
+		c.JSON(404, gin.H{"error": "Book not found"})
 		return
 	}
 
 	var updatedBook models.Book
-	if err := json.NewDecoder(r.Body).Decode(&updatedBook); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if err := c.ShouldBindBodyWithJSON(&updatedBook); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
 	if updatedBook.Title == "" {
-		http.Error(w, "Title is required", http.StatusBadRequest)
+		c.JSON(400, gin.H{"error": "Title is required"})
 		return
 	}
 	if updatedBook.Price <= 0 {
-		http.Error(w, "Price must be greater than 0", http.StatusBadRequest)
+		c.JSON(400, gin.H{"error": "Price must be greater than 0"})
 		return
 	}
 
 	updatedBook.ID = id
 	models.Books[id] = updatedBook
-	json.NewEncoder(w).Encode(updatedBook)
+	c.JSON(200, updatedBook)
 }
 
-func DeleteBook(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	params := mux.Vars(r)
-	id, err := strconv.Atoi(params["id"])
+func DeleteBook(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		http.Error(w, "Invalid Book ID", http.StatusBadRequest)
+		c.JSON(400, gin.H{"error": "Invalid book ID"})
 		return
 	}
 	_, exists := models.Books[id]
 	if !exists {
-		http.Error(w, "Book not found", http.StatusNotFound)
+		c.JSON(404, gin.H{"error": "Book not found"})
 		return
 	}
 	delete(models.Books, id)
-	w.WriteHeader(http.StatusNoContent)
+	c.Status(204)
 }
