@@ -12,9 +12,9 @@ func main() {
 
 	r.GET("/books", handlers.GetBooks)
 	r.POST("/books", handlers.AddBook)
-	r.GET("/books/{id}", handlers.GetBook)
-	r.PUT("/books/{id}", handlers.UpdateBook)
-	r.DELETE("/books/{id}", handlers.DeleteBook)
+	r.GET("/books/:id", handlers.GetBook)
+	r.PUT("/books/:id", handlers.UpdateBook)
+	r.DELETE("/books/:id", handlers.DeleteBook)
 
 	r.GET("/authors", handlers.GetAuthors)
 	r.POST("/authors", handlers.AddAuthor)
