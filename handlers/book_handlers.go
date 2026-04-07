@@ -1,139 +1,100 @@
 package handlers
 
 import (
+	"bookstore/config"
 	"bookstore/models"
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
 func GetBooks(c *gin.Context) {
+	var filteredBooks []models.Book
+
 	category := c.Query("category_id")
-	pageStr := c.Query("page")
-	limitStr := c.Query("limit")
+	page, _ := strconv.Atoi(c.DefaultQuery("p", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("l", "5"))
+	offset := (page - 1) * limit
 
-	page, _ := strconv.Atoi(pageStr)
-	limit, _ := strconv.Atoi(limitStr)
+	query := config.DB.Limit(limit).Offset(offset)
 
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 {
-		limit = 5
+	if category != "" {
+		query = query.Where("category_id=?", category)
 	}
 
-	var filtered []models.Book
-
-	// filter
-	for _, book := range models.Books {
-		if category != "" {
-			catID, _ := strconv.Atoi(category)
-			if book.CategoryID != catID {
-				continue
-			}
-		}
-		filtered = append(filtered, book)
-	}
-
-	// pagination
-	start := (page - 1) * limit
-	end := start + limit
-
-	if start > len(filtered) {
-		start = len(filtered)
-	}
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-
-	c.JSON(200, filtered[start:end])
+	query.Find(&filteredBooks)
+	c.JSON(http.StatusOK, filteredBooks)
 }
 
 func AddBook(c *gin.Context) {
-	var book models.Book
+	var newBook models.Book
 
-	if err := c.ShouldBindBodyWithJSON(&book); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&newBook); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
+	}
+	if newBook.Title == "" {
+		c.JSON(http.StatusBadRequest, "Title can not be empty!")
+		return
+	}
+	if newBook.Price <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Price must be greater that 0"})
 		return
 	}
 
-	if book.Title == "" {
-		c.JSON(400, gin.H{"error": "Title is required"})
-		return
-	}
-	if book.Price <= 0 {
-		c.JSON(400, gin.H{"error": "Price must be greater than 0"})
+	if err := config.DB.Create(&newBook).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create book"})
 		return
 	}
 
-	book.ID = models.NextBookID
-	models.NextBookID++
-	models.Books[book.ID] = book
-
-	c.JSON(200, book)
+	c.JSON(http.StatusCreated, newBook)
 }
 
 func GetBook(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	id := c.Param("id")
+	var book models.Book
 
-	if err != nil {
-		c.JSON(400, gin.H{"error": "Invalid book ID"})
+	if err := config.DB.First(&book, id).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Book not found"})
 		return
 	}
 
-	book, exists := models.Books[id]
-	if !exists {
-		c.JSON(404, gin.H{"error": "Book not found"})
-		return
-	}
-
-	c.JSON(200, book)
+	c.JSON(http.StatusOK, book)
 }
 
 func UpdateBook(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	bookID := c.Param("id")
+	var book models.Book
 
-	if err != nil {
-		c.JSON(400, gin.H{"error": "Invalid book ID"})
-		return
-	}
-	_, exists := models.Books[id]
-	if !exists {
-		c.JSON(404, gin.H{"error": "Book not found"})
+	if err := config.DB.First(&book, bookID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Book not found"})
 		return
 	}
 
 	var updatedBook models.Book
-	if err := c.ShouldBindBodyWithJSON(&updatedBook); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if err := c.ShouldBindJSON(&updatedBook); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	if updatedBook.Title == "" {
-		c.JSON(400, gin.H{"error": "Title is required"})
-		return
-	}
-	if updatedBook.Price <= 0 {
-		c.JSON(400, gin.H{"error": "Price must be greater than 0"})
-		return
-	}
+	book.Title = updatedBook.Title
+	book.Price = updatedBook.Price
+	book.CategoryID = updatedBook.CategoryID
+	book.AuthorID = updatedBook.AuthorID
 
-	updatedBook.ID = id
-	models.Books[id] = updatedBook
-	c.JSON(200, updatedBook)
+	config.DB.Save(&book)
+	c.JSON(http.StatusOK, book)
+
 }
 
 func DeleteBook(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(400, gin.H{"error": "Invalid book ID"})
+	id := c.Param("id")
+
+	if err := config.DB.First(&models.Book{}, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Failed to delete"})
 		return
 	}
-	_, exists := models.Books[id]
-	if !exists {
-		c.JSON(404, gin.H{"error": "Book not found"})
-		return
-	}
-	delete(models.Books, id)
-	c.Status(204)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Book deleted"})
 }

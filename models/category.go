@@ -1,9 +1,6 @@
 package models
 
 type Category struct {
-	ID   int    `json:"id"`
+	ID   uint   `gorm:"primaryKey" json:"id"`
 	Name string `json:"name"`
 }
-
-var Categories = make(map[int]Category)
-var NextCategoryID = 1

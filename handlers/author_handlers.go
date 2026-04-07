@@ -1,33 +1,35 @@
 package handlers
 
 import (
+	"bookstore/config"
 	"bookstore/models"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 func GetAuthors(c *gin.Context) {
-	var authorList []models.Author
-	for _, author := range models.Authors {
-		authorList = append(authorList, author)
+	var authors []models.Author
+
+	if err := config.DB.Find(&authors).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Couldn't fetch data"})
+		return
 	}
-	c.JSON(200, authorList)
+	c.JSON(http.StatusOK, authors)
 }
+
 func AddAuthor(c *gin.Context) {
-	var author models.Author
+	var newAuthor models.Author
 
-	if err := c.ShouldBindBodyWithJSON(&author); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-	if author.Name == "" {
-		c.JSON(400, gin.H{"error": "Author's name is required"})
+	if err := c.ShouldBindJSON(&newAuthor); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	author.ID = models.NextAuthorID
-	models.NextAuthorID++
-	models.Authors[author.ID] = author
+	if err := config.DB.Create(&newAuthor).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create book"})
+		return
+	}
 
-	c.JSON(201, author)
+	c.JSON(http.StatusCreated, newAuthor)
 }

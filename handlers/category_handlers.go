@@ -1,35 +1,35 @@
 package handlers
 
 import (
+	"bookstore/config"
 	"bookstore/models"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 func GetCategories(c *gin.Context) {
-	var categoryList []models.Category
+	var categories models.Category
 
-	for _, category := range models.Categories {
-		categoryList = append(categoryList, category)
+	if err := config.DB.Find(&categories).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Couldn't fetch data"})
+		return
 	}
-
-	c.JSON(200, categoryList)
+	c.JSON(http.StatusOK, categories)
 }
+
 func AddCategory(c *gin.Context) {
-	var category models.Category
+	var newCategory models.Category
 
-	if err := c.ShouldBindBodyWithJSON(&category); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
-		return
-	}
-	if category.Name == "" {
-		c.JSON(400, gin.H{"error": "Category's name is required"})
+	if err := c.ShouldBindJSON(&newCategory); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
 		return
 	}
 
-	category.ID = models.NextCategoryID
-	models.NextCategoryID++
-	models.Categories[category.ID] = category
+	if err := config.DB.Create(&newCategory).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create category"})
+		return
+	}
 
-	c.JSON(200, category)
+	c.JSON(http.StatusCreated, newCategory)
 }
