@@ -43,7 +43,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// Add user ID to context
-		c.Set("user_id", claims["user_id"])
+		c.Set("user_id", uint(claims["user_id"].(float64)))
 		c.Next()
 	}
 }

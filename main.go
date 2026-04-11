@@ -36,6 +36,11 @@ func main() {
 		// Category routes
 		protected.GET("/categories", handlers.GetCategories)
 		protected.POST("/categories", handlers.AddCategory)
+
+		protected.GET("/favourites", handlers.GetFavourites)
+		protected.POST("/books/:id/favourites", handlers.AddFavourites)
+		protected.DELETE("/books/:id/favourite", handlers.DeleteFavourite)
+
 	}
 
 	r.Run(":8080")
